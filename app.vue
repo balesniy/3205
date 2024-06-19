@@ -1,6 +1,5 @@
 <template>
   <div>
-    <NuxtLoadingIndicator/>
     <UContainer class="py-8">
       <UCard>
         <template #header>
@@ -9,11 +8,11 @@
 
         <UForm ref="form" :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
           <UFormGroup label="Email" name="email" required>
-            <UInput v-model="state.email" />
+            <UInput v-model="state.email"/>
           </UFormGroup>
 
-          <UFormGroup label="Number" name="number">
-            <UInput v-model="state.number" type="text" v-maska:unmaskedValue.unmasked="'##-##-##'" />
+          <UFormGroup label="Number" name="masked">
+            <UInput v-model="state.masked" type="text" v-maska:unmaskedValue.unmasked="'##-##-##'"/>
           </UFormGroup>
 
           <UButton type="submit">
@@ -22,45 +21,42 @@
         </UForm>
 
         <template #footer>
-          <UTable :rows="state.data" />
+          <UTable :rows="userData.data" :loading="userData.loading" />
         </template>
       </UCard>
     </UContainer>
   </div>
 </template>
 <script setup lang="ts">
+import { reactive } from 'vue';
 import { userSchema as schema } from '@/schema/user';
+import { useFormHandler } from '@/composables/useFormHandler';
+import { useUserFetcher } from '@/composables/useUserFetcher';
+import type { FormSubmitEvent } from '#ui/types';
 import type { Schema } from '@/schema/user';
-import type { FormError, FormSubmitEvent } from '#ui/types'
-import type { User } from '@/data/user'
 
+const { form, clearForm, handleValidationErrors } = useFormHandler();
+const { fetchUsers, userData, abortFetch } = useUserFetcher();
 
 const state = reactive({
   email: undefined,
-  number: undefined,
-  data: [] as User[],
+  masked: undefined,
+});
+
+const unmaskedValue = ref('');
+
+defineExpose({
+  unmaskedValue
 })
 
-const unmaskedValue = ref('')
-defineExpose({ unmaskedValue })
+async function onSubmit(event: FormSubmitEvent<Schema>) {
+  clearForm();
+  abortFetch();
 
-const form = ref()
-
-async function onSubmit (event: FormSubmitEvent<Schema>) {
-  form.value.clear()
   try {
-    const { users } = await $fetch('/api/users', {
-      query: { number: unmaskedValue.value, email: state.email },
-    })
-    state.data = users
+    await fetchUsers(unmaskedValue.value, state.email);
   } catch (err) {
-    if (err.statusCode === 422) {
-      form.value.setErrors(err.data.errors.map((err) => ({
-        // Map validation errors to { path: string, message: string }
-        message: err.message,
-        path: err.path,
-      })))
-    }
+    handleValidationErrors(err);
   }
 }
 </script>
